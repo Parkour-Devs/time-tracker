@@ -8,14 +8,14 @@ import {
   SelectLabel,
   SelectTrigger,
 } from "@/components/ui/select";
-import { getUserSession } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 import { Activity, Client, Project } from "@prisma/client";
 import { Building2, FolderOpenDot, Play, Square } from "lucide-react";
 import { revalidatePath } from "next/cache";
 import { ActivityItemRow } from "./activity-item-row";
 import { ActivityDuration } from "./duration";
+import { stopActivity, upsertActivity } from "@/lib/actions/track";
+import { getClientsByTenant, getCurrentActivityByUser, getDailyActivitiesByUser, getProjectsByTenant } from "@/lib/db/track";
 
 type TimeProps = {
   startAt: string;
@@ -28,52 +28,6 @@ type NewActivityProps = {
 };
 
 const NewActivity = ({ activity, clients, projects }: NewActivityProps) => {
-  async function upsertActivity(data: FormData) {
-    "use server";
-    const user = await getUserSession();
-    const client = data.get("client") as string;
-    const project = data.get("project") as string;
-
-    await prisma.activity.upsert({
-      where: {
-        id: data.get("id") as string,
-      },
-      create: {
-        user: { connect: { id: user.id } },
-        tenant: { connect: { id: user.tenant.id } },
-        name: data.get("name") as string,
-        startAt: new Date(),
-        client: !!client ? { connect: { id: client } } : undefined,
-        project: !!project ? { connect: { id: project } } : undefined,
-      },
-      update: {
-        name: data.get("name") as string,
-        client: !!client ? { connect: { id: client } } : undefined,
-        project: !!project ? { connect: { id: project } } : undefined,
-      },
-    });
-    revalidatePath("/track");
-  }
-
-  async function stopActivity(data: FormData) {
-    "use server";
-
-    const client = data.get("client") as string;
-    const project = data.get("project") as string;
-
-    await prisma.activity.update({
-      where: {
-        id: data.get("id") as string,
-      },
-      data: {
-        endAt: new Date(),
-        name: data.get("name") as string,
-        client: !!client ? { connect: { id: client } } : undefined,
-        project: !!project ? { connect: { id: project } } : undefined,
-      },
-    });
-    revalidatePath("/track");
-  }
 
   return (
     <div>
@@ -146,61 +100,10 @@ const DailyActivities = ({ activities }: DailyActivitiesProps) => {
 };
 
 export default async function TrackPage() {
-  const user = await getUserSession();
-  const currentActivity = await prisma.activity.findFirst({
-    where: {
-      tenantId: user.tenant.id,
-      userId: user.id,
-      endAt: null,
-    },
-  });
-
-  const clients = await prisma.client.findMany({
-    where: {
-      tenantId: user.tenant.id,
-    },
-  });
-
-  const projects = await prisma.project.findMany({
-    where: {
-      tenantId: user.tenant.id,
-    },
-  });
-
-  const now = new Date();
-  const startOfToday = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate()
-  );
-  const endOfToday = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    23,
-    59,
-    59
-  );
-
-  const dailyActivities = await prisma.activity.findMany({
-    where: {
-      tenantId: user.tenant.id,
-      userId: user.id,
-      startAt: {
-        gte: startOfToday,
-      },
-      endAt: {
-        lte: endOfToday,
-      },
-    },
-    orderBy: {
-      startAt: "asc",
-    },
-    include: {
-      project: true,
-      client: true,
-    },
-  });
+  const currentActivity = await getCurrentActivityByUser();
+  const clients = await getClientsByTenant();
+  const projects = await getProjectsByTenant();
+  const activities = await getDailyActivitiesByUser();
 
   return (
     <div className="mx-auto container py-4 space-y-12">
@@ -209,7 +112,7 @@ export default async function TrackPage() {
         clients={clients}
         projects={projects}
       />
-      <DailyActivities activities={dailyActivities} />
+      <DailyActivities activities={activities} />
     </div>
   );
 }
