@@ -92,5 +92,4 @@ model Project {
   clientId   String?
   client     Client?    @relation(fields: [clientId], references: [id])
   activities Activity[]
-  Tags       String[]
 }
