@@ -11,7 +11,6 @@ import {
 import { cn } from "@/lib/utils";
 import { Activity, Client, Project } from "@prisma/client";
 import { Building2, FolderOpenDot, Play, Square } from "lucide-react";
-import { revalidatePath } from "next/cache";
 import { ActivityItemRow } from "./activity-item-row";
 import { ActivityDuration } from "./duration";
 import { stopActivity, upsertActivity } from "@/lib/actions/track";
